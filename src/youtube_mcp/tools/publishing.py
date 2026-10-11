@@ -5,6 +5,7 @@ import os
 from googleapiclient.http import MediaFileUpload
 
 from youtube_mcp.server import auth, mcp, quota
+from youtube_mcp.utils.localizations import merge_localizations
 
 # Schreibbare Felder des status-Parts. videos.update ersetzt den KOMPLETTEN
 # status-Block: was hier nicht mitgeschickt wird, setzt YouTube auf den Default
@@ -120,6 +121,8 @@ def youtube_update_video(
     made_for_kids: bool | None = None,
     contains_synthetic_media: bool | None = None,
     embeddable: bool | None = None,
+    localizations: dict[str, dict[str, str]] | None = None,
+    default_language: str | None = None,
 ) -> dict:
     """Update metadata for an existing video.
 
@@ -136,6 +139,13 @@ def youtube_update_video(
         made_for_kids: COPPA self-declaration. Pass True/False to set selfDeclaredMadeForKids. Videos that were uploaded without this declaration cannot be published until it is set.
         contains_synthetic_media: AI label (status.containsSyntheticMedia), True/False.
         embeddable: Allow embedding on other sites.
+        localizations: Translated title/description per language, e.g.
+            {"uk": {"title": "...", "description": "..."}}. Merged into the
+            existing translations: other languages and fields not passed stay.
+            A new language needs a title.
+        default_language: Language of the main title/description
+            (snippet.defaultLanguage, e.g. "ru"). Required when adding
+            localizations to a video that has none set.
 
     Status fields that are not passed keep their current value (embeddable,
     publishAt, license, ...). Changing privacy away from "private" drops publishAt.
@@ -144,7 +154,9 @@ def youtube_update_video(
     youtube = auth.build_youtube_service()
 
     # Fetch current video data first
-    current = youtube.videos().list(part="snippet,status", id=video_id).execute()
+    current = (
+        youtube.videos().list(part="snippet,status,localizations", id=video_id).execute()
+    )
     items = current.get("items", [])
     if not items:
         return {"error": f"Video not found: {video_id}"}
@@ -152,6 +164,14 @@ def youtube_update_video(
     video = items[0]
     snippet = video["snippet"]
     status = video["status"]
+
+    # videos.update ersetzt den kompletten localizations-Part: aktuellen Stand
+    # lesen und nur die uebergebenen Sprachen/Felder aendern.
+    new_localizations, error = merge_localizations(
+        snippet, video.get("localizations"), localizations, default_language, title_limit=100
+    )
+    if error:
+        return {"error": error}
 
     # Update only provided fields
     if title is not None:
@@ -181,6 +201,10 @@ def youtube_update_video(
     else:
         parts = "snippet"
 
+    if new_localizations is not None:
+        body["localizations"] = new_localizations
+        parts += ",localizations"
+
     quota.consume("update")
     response = youtube.videos().update(part=parts, body=body).execute()
 
@@ -195,6 +219,8 @@ def youtube_update_video(
         "publish_at": response_status.get("publishAt"),
         "embeddable": response_status.get("embeddable"),
         "contains_synthetic_media": response_status.get("containsSyntheticMedia"),
+        "default_language": response["snippet"].get("defaultLanguage"),
+        "localizations": response.get("localizations"),
         "updated": True,
     }
 

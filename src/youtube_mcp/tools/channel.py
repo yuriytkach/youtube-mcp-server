@@ -168,7 +168,10 @@ def youtube_get_video(video_id: str) -> dict:
 
     response = (
         youtube.videos()
-        .list(part="snippet,statistics,contentDetails,status,topicDetails", id=video_id)
+        .list(
+            part="snippet,statistics,contentDetails,status,topicDetails,localizations",
+            id=video_id,
+        )
         .execute()
     )
 
@@ -191,6 +194,10 @@ def youtube_get_video(video_id: str) -> dict:
     # nicht "kein KI-Label". Belastbar ist nur die Antwort von upload/update.
     summary["contains_synthetic_media"] = status.get("containsSyntheticMedia")
     summary["topic_categories"] = video.get("topicDetails", {}).get("topicCategories", [])
+    snippet = video.get("snippet", {})
+    summary["default_language"] = snippet.get("defaultLanguage")
+    summary["default_audio_language"] = snippet.get("defaultAudioLanguage")
+    summary["localizations"] = video.get("localizations", {})
 
     return summary
 
