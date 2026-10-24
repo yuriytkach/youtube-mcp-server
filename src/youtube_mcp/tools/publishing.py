@@ -123,6 +123,7 @@ def youtube_update_video(
     embeddable: bool | None = None,
     localizations: dict[str, dict[str, str]] | None = None,
     default_language: str | None = None,
+    default_audio_language: str | None = None,
 ) -> dict:
     """Update metadata for an existing video.
 
@@ -146,6 +147,10 @@ def youtube_update_video(
         default_language: Language of the main title/description
             (snippet.defaultLanguage, e.g. "ru"). Required when adding
             localizations to a video that has none set.
+        default_audio_language: Spoken language of the video
+            (snippet.defaultAudioLanguage, e.g. "ru"). YouTube may fill an
+            unset one with the account language on any update, so pass it for
+            videos that have none.
 
     Status fields that are not passed keep their current value (embeddable,
     publishAt, license, ...). Changing privacy away from "private" drops publishAt.
@@ -182,6 +187,8 @@ def youtube_update_video(
         snippet["tags"] = tags
     if category_id is not None:
         snippet["categoryId"] = category_id
+    if default_audio_language is not None:
+        snippet["defaultAudioLanguage"] = default_audio_language
 
     body = {"id": video_id, "snippet": snippet}
 
@@ -220,6 +227,7 @@ def youtube_update_video(
         "embeddable": response_status.get("embeddable"),
         "contains_synthetic_media": response_status.get("containsSyntheticMedia"),
         "default_language": response["snippet"].get("defaultLanguage"),
+        "default_audio_language": response["snippet"].get("defaultAudioLanguage"),
         "localizations": response.get("localizations"),
         "updated": True,
     }

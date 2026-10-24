@@ -262,3 +262,34 @@ class TestPlaylistItems:
 
         result = youtube_move_playlist_item("PI1", "PL1", "v1", -1)
         assert "error" in result
+
+
+class TestDefaultAudioLanguage:
+    @patch("youtube_mcp.tools.publishing.auth")
+    @patch("youtube_mcp.tools.publishing.quota")
+    def test_sets_default_audio_language(self, mock_quota, mock_auth):
+        from youtube_mcp.tools.publishing import youtube_update_video
+
+        mock_yt = MagicMock()
+        mock_auth.build_youtube_service.return_value = mock_yt
+        mock_yt.videos().list().execute.return_value = _video()
+        mock_yt.videos().update().execute.return_value = {
+            "id": "vid1", "snippet": {"title": "T", "defaultAudioLanguage": "ru"}
+        }
+
+        result = youtube_update_video(video_id="vid1", default_audio_language="ru")
+        assert _update_call(mock_yt.videos)["body"]["snippet"]["defaultAudioLanguage"] == "ru"
+        assert result["default_audio_language"] == "ru"
+
+    @patch("youtube_mcp.tools.publishing.auth")
+    @patch("youtube_mcp.tools.publishing.quota")
+    def test_not_sent_when_not_passed(self, mock_quota, mock_auth):
+        from youtube_mcp.tools.publishing import youtube_update_video
+
+        mock_yt = MagicMock()
+        mock_auth.build_youtube_service.return_value = mock_yt
+        mock_yt.videos().list().execute.return_value = _video()
+        mock_yt.videos().update().execute.return_value = {"id": "vid1", "snippet": {"title": "N"}}
+
+        youtube_update_video(video_id="vid1", title="N")
+        assert "defaultAudioLanguage" not in _update_call(mock_yt.videos)["body"]["snippet"]
